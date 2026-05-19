@@ -67,6 +67,40 @@ Votre mission (si vous l'acceptez) : Concevoir une architecture **API-driven** d
 3. Création des API (+ fonction Lambda)
 4. Ouverture des ports et vérification du fonctionnement
 
+## 🛠️ Processus de travail (détaillé)
+
+Afin de répondre aux exigences de l'atelier et d'assurer un déploiement reproductible, le travail a été structuré selon les quatre étapes suivantes :
+
+**1. Installation de l'environnement Localstack (Séquence 2)**
+* **Préparation du Codespace :** Création et initialisation d'un environnement virtuel Python directement dans le terminal de GitHub Codespaces.
+* **Mise en place de l'émulateur :** Installation de LocalStack via le gestionnaire de paquets `pip` et authentification à l'aide d'un jeton (Auth Token) généré sur la plateforme web de LocalStack.
+* **Lancement :** Démarrage des services AWS émulés en tâche de fond (`localstack start -d`) et vérification de la disponibilité des services.
+* **Outils tiers :** Installation et configuration locale de l'outil `awscli` pour permettre au script de communiquer de manière fluide avec l'émulateur : 
+```
+curl "[https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip](https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip)" -o "awscliv2.zip"
+unzip -q awscliv2.zip && sudo ./aws/install
+```
+**2. Création de l'instance EC2**
+* **Recherche dynamique :** Pour éviter les erreurs liées aux faux identifiants, le script `deploy.sh` interroge d'abord LocalStack (`aws ec2 describe-images`) pour récupérer automatiquement un identifiant d'image système (AMI) valide dans son catalogue.
+* **Provisionnement :** Lancement de la création d'un serveur type `t2.micro` en utilisant l'AMI récupérée.
+* **Capture de contexte :** Le script extrait et sauvegarde l'identifiant unique de l'instance fraîchement créée (ex: `i-0a23f9...`) afin de le transmettre à la fonction Lambda.
+
+**3. Création des API (+ fonction Lambda)**
+* **Code métier (Python) :** Rédaction du script `lambda_function.py` intégrant la bibliothèque `boto3` pour envoyer les ordres de démarrage et d'arrêt. Le code inclut une gestion d'erreur (try/except) pour faciliter le diagnostic en cas d'échec. Le fichier est ensuite compressé au format `.zip`.
+* **Gestion des accès (IAM) :** Création d'un rôle de sécurité (`lambda-role`) autorisant le service Lambda à s'exécuter.
+* **Déploiement Lambda :** Création de la fonction `PiloteEC2` via le script bash. L'identifiant de l'instance EC2 capturé à l'étape précédente lui est injecté de manière sécurisée via une variable d'environnement (`INSTANCE_ID`).
+* **Orchestration API Gateway :** Création d'une API REST nommée `MonAPI`. Configuration d'une méthode `GET` avec une intégration de type `AWS_PROXY` pointant vers la fonction Lambda. L'API est finalement déployée sur un environnement nommé `prod`.
+
+**4. Ouverture des ports et vérification du fonctionnement**
+* **Configuration réseau :** Modification de la visibilité du port `4566` (port de communication de LocalStack) dans l'interface de GitHub Codespaces pour le passer de *Privé* à *Public*. Cela lève l'erreur 403 de base et autorise le navigateur à communiquer avec le faux Cloud.
+* **Assemblage des routes :** Génération dynamique des URL complètes combinant l'adresse publique du Codespace (le socle) et le chemin d'accès unique créé par l'API Gateway.
+* **Validation des tests :** Exécution des requêtes HTTP avec les paramètres `?action=start` et `?action=stop` dans le navigateur, validée par le retour des messages de succès au format JSON (ex: `{"message": "Succès : L'instance a été DÉMARRÉE."}`) : lancer 
+```bash
+chmod +x deploy.sh
+./deploy.sh
+```
+
+
 ---------------------------------------------------
 Séquence 4 : Documentation  
 Difficulté : Facile (~30 minutes)
